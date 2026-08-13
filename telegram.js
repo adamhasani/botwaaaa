@@ -96,12 +96,22 @@ export default async function startTelegram() {
             const text = (message.text || message.caption || '').trim();
             if (!text) return;
 
-            const parsed = parseCommand(text, stg.prefix);
+            const parsed = parseCommand(text, stg.telegramPrefix, stg.prefix);
 
             if (parsed) {
-                const plugin = plugins.get(parsed.commandText);
+                // [FITUR] ".menu" (prefix WA) vs "/menu" (prefix Telegram) beda isi,
+                // ditentukan prefix yang dipakai, bukan platform. ".menu" di Telegram
+                // tetap nunjuk ke menu Archive.
+                let commandText = parsed.commandText;
+                if (commandText === 'menu' && parsed.usedPrefix === stg.prefix && parsed.usedPrefix !== stg.telegramPrefix) {
+                    commandText = 'menu'; // Archive — sudah defaultnya menuju sini
+                } else if (commandText === 'menu' && parsed.usedPrefix === stg.telegramPrefix) {
+                    commandText = 'menuflora';
+                }
+
+                const plugin = plugins.get(commandText);
                 if (plugin) {
-                    console.log(chalk.magenta(`[CMD-TG] ${isOwner ? '👑' : '👤'} ${chatId} → ${parsed.commandText}`));
+                    console.log(chalk.magenta(`[CMD-TG] ${isOwner ? '👑' : '👤'} ${chatId} → ${parsed.usedPrefix}${parsed.commandText}`));
                     if (plugin.owner && !isOwner) {
                         return conn.sendMessage(chatId, { text: '❌ Command ini khusus owner!' }, { quoted: msg });
                     }
@@ -109,9 +119,10 @@ export default async function startTelegram() {
                         return await plugin.run(conn, msg, {
                             chatInfo: { chatId, senderId: chatId, isGroup: message.chat.type !== 'private', isOwner },
                             args: parsed.args,
-                            prefix: stg.prefix,
-                            commandText: parsed.commandText,
-                            command: parsed.commandText,
+                            prefix: stg.telegramPrefix,
+                            platform: 'telegram',
+                            commandText,
+                            command: commandText,
                             text,
                         });
                     } catch (e) {
@@ -135,6 +146,52 @@ export default async function startTelegram() {
     });
 
     bot.catch((err) => console.error(chalk.red(`[TELEGRAM][FATAL] ${err.message}`)));
+
+    // ── Handler klik tombol inline (callback_query) ──
+    // Perlakukan callback_data (mis. "/menu", ".menu") persis kayak user ngetik command itu.
+    bot.on('callback_query', async (ctx) => {
+        try {
+            const query = ctx.callbackQuery;
+            const chatId = String(query.message.chat.id);
+            const isOwner = checkIsOwner(chatId);
+            const text = query.data || '';
+            await ctx.answerCbQuery(); // wajib — biar tombol ga "loading" terus di UI Telegram
+
+            const msg = {
+                key: { remoteJid: chatId, fromMe: false, id: String(query.message.message_id), participant: undefined },
+                telegramMessageId: query.message.message_id,
+                message: null,
+                pushName: query.from?.first_name || query.from?.username || 'User',
+            };
+
+            const parsed = parseCommand(text, stg.telegramPrefix, stg.prefix);
+            if (!parsed) return;
+
+            let commandText = parsed.commandText;
+            if (commandText === 'menu' && parsed.usedPrefix === stg.prefix && parsed.usedPrefix !== stg.telegramPrefix) {
+                commandText = 'menu';
+            } else if (commandText === 'menu' && parsed.usedPrefix === stg.telegramPrefix) {
+                commandText = 'menuflora';
+            }
+
+            const plugin = plugins.get(commandText);
+            if (!plugin) return;
+            if (plugin.owner && !isOwner) return;
+
+            console.log(chalk.magenta(`[BTN-TG] ${isOwner ? '👑' : '👤'} ${chatId} → ${text}`));
+            await plugin.run(conn, msg, {
+                chatInfo: { chatId, senderId: chatId, isGroup: query.message.chat.type !== 'private', isOwner },
+                args: parsed.args,
+                prefix: stg.telegramPrefix,
+                platform: 'telegram',
+                commandText,
+                command: commandText,
+                text,
+            });
+        } catch (e) {
+            console.error(chalk.red(`[BTN-TG][ERROR] ${e.message}`));
+        }
+    });
 
     await bot.launch();
     global.__tgConn = conn; // dipakai main.js (WA) buat kirim reminder cross-platform

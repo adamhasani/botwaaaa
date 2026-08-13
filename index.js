@@ -7,14 +7,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 global.__dirname = __dirname;
 
-// Pastiin folder session & db ada sebelum apapun
-const sessionDir = join(__dirname, 'session');
-const dbDir      = join(__dirname, 'toolkit/db');
-if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
-if (!fs.existsSync(dbDir))      fs.mkdirSync(dbDir, { recursive: true });
+// Pastiin folder auth (sesi WA — nama folder sesuai opsi "auth" @isaxn/bailyes) & db ada sebelum apapun
+const authDir = join(__dirname, 'auth');
+const dbDir   = join(__dirname, 'toolkit/db');
+if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+if (!fs.existsSync(dbDir))   fs.mkdirSync(dbDir, { recursive: true });
 
+// [MIGRASI] --pairing sudah gak perlu lagi — @isaxn/bailyes otomatis pilih
+// pairing code (kalau BOT_NUMBER diisi di .env) atau QR (kalau kosong).
 const args = process.argv.slice(2);
-const usePairing = args.includes('--pairing');
 
 // Tunggu sebentar biar file system siap
 await new Promise(r => setTimeout(r, 3000));
@@ -28,7 +29,7 @@ const { default: startTelegram } = await import('./telegram.js');
 const { terminateOcrWorker } = await import('./toolkit/fileReaders/imageOcr.js');
 
 // Jalanin dua-duanya bareng. Kalau salah satu gagal/belum dikonfig, yang lain tetap jalan.
-main(usePairing).catch(e => console.error('[WA] gagal start:', e.message));
+main().catch(e => console.error('[WA] gagal start:', e.message));
 startTelegram().catch(e => console.error('[TELEGRAM] gagal start:', e.message));
 
 // ── GRACEFUL SHUTDOWN ──
