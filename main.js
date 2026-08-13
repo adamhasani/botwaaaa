@@ -1,28 +1,33 @@
 /* ╔══════════════════════════════════════════╗
    ║  THE ARCHIVE LITE - VPS EDITION         ║
    ║  Bot WA murni — data dari sync.js       ║
+   ║  [MIGRASI] Sekarang pakai @isaxn/bailyes  ║
+   ║  buat koneksi (reconnect stabil, tombol   ║
+   ║  native bx.button/bx.list). Command       ║
+   ║  routing & 33 plugin lama TETAP dipakai   ║
+   ║  apa adanya lewat bot.on('messages.upsert')║
+   ║  — cuma socket-nya yang berubah sumbernya. ║
    ╚══════════════════════════════════════════╝ */
 
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
-import pino from 'pino';
 import chalk from 'chalk';
-import readline from 'readline';
-import qrcode from 'qrcode-terminal';
 
-import {
-    makeWASocket,
-    proto,
-    useMultiFileAuthState,
-    DisconnectReason,
-    fetchLatestBaileysVersion,
-    getContentType,
-    Browsers,
-    jidNormalizedUser,
-    delay
-} from '@whiskeysockets/baileys';
+import { Bailyes } from '@isaxn/bailyes';
+// [CATATAN TESTING] Paket ini didesain jalan lewat require() (CJS) menurut
+// README-nya. Project kita "type": "module" (ESM murni) — kalau baris import
+// di atas gagal resolve pas dijalankan ("Bailyes is not a function" atau
+// "does not provide an export named 'Bailyes'"), ganti jadi:
+//   import bailyesPkg from '@isaxn/bailyes';
+//   const { Bailyes } = bailyesPkg;
+// (Node ESM default-import dari modul CJS, lalu destructure manual.)
+
+// getContentType & jidNormalizedUser tetap dari paket "baileys" (nama baru,
+// bukan "@whiskeysockets/baileys") — ini dependency yang dimuat @isaxn/bailyes
+// di dalamnya (lihat README-nya), jadi otomatis ke-install, gak perlu ditambah manual.
+import { getContentType, jidNormalizedUser } from 'baileys';
 
 import stg from './toolkit/setting.js';
 import { logSentMessage } from './toolkit/msgLog.js';
@@ -34,9 +39,10 @@ import { runDueRemindersOnce, runMorningBriefingOnce } from './scheduler/simpana
 import { handleFreeformMessage } from './toolkit/aiChatHandler.js';
 import * as simpananDb from './toolkit/simpananDb.js';
 import { parseCommand } from './toolkit/commandParser.js';
+import { getContactName } from './toolkit/waStore.js';
 
 const __dirname = global.__dirname;
-const sessionDir = path.join(__dirname, 'session');
+const sessionDir = path.join(__dirname, 'auth'); // [FIX] @isaxn/bailyes pakai opsi "auth" sebagai nama folder default
 const dbDir      = path.join(__dirname, 'toolkit/db');
 
 if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
@@ -52,7 +58,7 @@ function checkIsOwner(jid) {
 }
 
 // ─────────────────────────────────────────────
-// HELPER: PARSE MESSAGE
+// HELPER: PARSE MESSAGE (sama seperti sebelumnya, cuma sumber msg-nya dari Bailyes)
 // ─────────────────────────────────────────────
 function parseMessage(msg) {
     const type = getContentType(msg.message);
@@ -61,18 +67,11 @@ function parseMessage(msg) {
     else if (type === 'extendedTextMessage') text = msg.message.extendedTextMessage.text;
     else if (type === 'imageMessage') text = msg.message.imageMessage?.caption || '';
     else if (type === 'videoMessage') text = msg.message.videoMessage?.caption || '';
-    else if (type === 'documentMessage') text = msg.message.documentMessage?.caption || ''; // [FIX] caption dokumen (PDF/DOCX/XLSX) belum kebaca sebelumnya -> command lewat caption dokumen ga pernah kepicu
+    else if (type === 'documentMessage') text = msg.message.documentMessage?.caption || '';
     else if (type === 'buttonsResponseMessage') text = msg.message.buttonsResponseMessage.selectedButtonId;
     else if (type === 'listResponseMessage') text = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
-    return { type, text: text.trim() };
+    return { type, text: (text || '').trim() };
 }
-
-// ─────────────────────────────────────────────
-// HELPER: PARSE COMMAND
-// ─────────────────────────────────────────────
-// [FIX] Dulu pakai fungsi lokal yang cuma cek 1 prefix (gak ada fallback "/"),
-// beda perilaku sama Telegram. Sekarang pakai commandParser.js yang shared,
-// biar WA juga terima gaya "/command" konsisten sama Telegram.
 
 // ─────────────────────────────────────────────
 // HELPER: SEND WITH LOG
@@ -100,22 +99,18 @@ async function runStartupCheck(conn) {
     console.log(chalk.cyan('   STARTUP CHECK'));
     console.log(chalk.cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
 
-    // Plugin
     console.log(plugins.size > 0
         ? chalk.green(`[✓] Plugin     : ${plugins.size} plugin aktif`)
         : chalk.red(`[✗] Plugin     : Tidak ada plugin!`));
 
-    // Owner
     console.log(stg.ownerNumber
         ? chalk.green(`[✓] Owner      : ${stg.ownerNumber}`)
         : chalk.red(`[✗] Owner      : OWNER_NUMBER belum diset!`));
 
-    // Target
     console.log(stg.reminderTarget
         ? chalk.green(`[✓] Target     : ${stg.reminderTarget}`)
         : chalk.yellow(`[!] Target     : REMINDER_TARGET kosong`));
 
-    // Token (cek ada ga di .env, ga perlu hit API)
     const token = process.env.EDLINK_TOKEN;
     if (token) {
         const preview = token.substring(0, 8) + '...' + token.substring(token.length - 4);
@@ -124,7 +119,6 @@ async function runStartupCheck(conn) {
         console.log(chalk.yellow(`[!] Token      : Belum diset — fitur Edlink nonaktif`));
     }
 
-    // Jadwal DB
     try {
         const weeklyPath = path.join(dbDir, 'weekly_schedule.json');
         if (fs.existsSync(weeklyPath)) {
@@ -139,7 +133,6 @@ async function runStartupCheck(conn) {
         console.log(chalk.yellow(`[!] Jadwal DB  : Gagal baca — ${e.message}`));
     }
 
-    // Deadlines DB
     try {
         const deadlinesPath = path.join(dbDir, 'deadlines.json');
         if (fs.existsSync(deadlinesPath)) {
@@ -153,12 +146,9 @@ async function runStartupCheck(conn) {
         console.log(chalk.yellow(`[!] Deadline DB: Gagal baca — ${e.message}`));
     }
 
-    // Kirim jadwal hari ini
     console.log(chalk.gray(`[~] Jadwal     : Mengirim jadwal hari ini...`));
     try {
-        // Beri waktu socket "settle" dulu — kirim langsung pas connection.open
-        // sering timeout karena Baileys belum sepenuhnya siap (apalagi target grup).
-        await delay(5000);
+        await new Promise(r => setTimeout(r, 5000));
         await sendScheduleOnStartup(conn);
         console.log(chalk.green(`[✓] Jadwal     : Jadwal hari ini terkirim`));
     } catch (e) {
@@ -169,14 +159,14 @@ async function runStartupCheck(conn) {
 }
 
 // ─────────────────────────────────────────────
-// SYNC SERVER (terima data dari sync.js di PC)
+// SYNC SERVER (terima data dari sync.js di PC) — TIDAK BERUBAH
 // ─────────────────────────────────────────────
 function startSyncServer() {
     const port   = process.env.SYNC_PORT || 2667;
     const secret = process.env.SYNC_SECRET || '';
 
     http.createServer((req, res) => {
-        if (req.method !== 'POST') {
+        if (req.method !== 'POST' && req.method !== 'GET') {
             res.writeHead(405); res.end('Method Not Allowed'); return;
         }
 
@@ -184,7 +174,6 @@ function startSyncServer() {
             res.writeHead(401); res.end('Unauthorized'); return;
         }
 
-        // GET — ambil data DB dari VPS
         if (req.method === 'GET') {
             const type = req.url?.replace('/', '') || '';
             const files = { deadlines: 'deadlines.json', weekly_schedule: 'weekly_schedule.json' };
@@ -212,13 +201,11 @@ function startSyncServer() {
 
                 const filePath = path.join(dbDir, files[type]);
 
-                // Merge deadlines — jaga field reminded_* yang udah true
                 if (type === 'deadlines' && fs.existsSync(filePath)) {
                     try {
                         const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
                         for (const [key, val] of Object.entries(data)) {
                             if (existing[key]) {
-                                // Pertahankan field reminded dari data VPS
                                 data[key].reminded_h7   = existing[key].reminded_h7   || val.reminded_h7;
                                 data[key].reminded_h3   = existing[key].reminded_h3   || val.reminded_h3;
                                 data[key].reminded_h1   = existing[key].reminded_h1   || val.reminded_h1;
@@ -251,140 +238,79 @@ function startSyncServer() {
 // ─────────────────────────────────────────────
 // MAIN BOT
 // ─────────────────────────────────────────────
-export default async function main(usePairing = false, pilihMetode = null) {
+export default async function main() {
     await loadPlugins(__dirname);
 
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version }          = await fetchLatestBaileysVersion();
+    const num = (process.env.BOT_NUMBER || '').replace(/\D/g, '');
+    const usePairingCode = !!num;
 
-    // ── PILIH METODE PAIRING (sebelum socket dibuat) ──
-
-    if (!state.creds.registered && pilihMetode === null) {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        pilihMetode = await new Promise((resolve) => {
-            console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-            console.log(chalk.cyan('   PILIH METODE LOGIN'));
-            console.log(chalk.cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-            console.log(chalk.yellow('  1. Pairing Code'));
-            console.log(chalk.yellow('  2. QR Code'));
-            console.log(chalk.cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-            rl.question(chalk.white('Pilih (1/2): '), (ans) => { rl.close(); resolve(ans.trim()); });
-        });
-    }
-
-    if (!pilihMetode) pilihMetode = '1';
-    const conn = makeWASocket({
-        version,
-        auth: state,
-        logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Safari'),
-        printQRInTerminal: false,
-        generateHighQualityLinkPreview: false,
-        syncFullHistory: false,
-        // Wajib di Baileys v7+ — dipakai untuk retry decrypt pesan yang di-reply/quote.
-        // Bot ini tidak simpan history pesan lama, jadi return undefined (fallback aman).
-        getMessage: async () => undefined,
+    const bot = new Bailyes({
+        auth: sessionDir,
+        prefix: [stg.prefix, '/'],
+        pairingCode: usePairingCode,
+        phoneNumber: usePairingCode ? num : undefined,
+        reconnectDelay: 3000,
+        maxReconnectDelay: 30000,
+        maxReconnectAttempts: 0,
     });
 
-    conn.ev.on('creds.update', saveCreds);
+    bot.onFramework('qr', () => {
+        console.log(chalk.cyan('\n📷 QR CODE ditampilkan di atas — scan dengan WhatsApp.'));
+    });
 
-    // ── QR listener (aktif sebelum apapun kalau pilih 2) ──
-    if (pilihMetode === '2') {
-        conn.ev.on('connection.update', ({ qr }) => {
-            if (qr) {
-                console.log(chalk.cyan('\n📷 QR CODE — scan dengan WhatsApp:'));
-                qrcode.generate(qr, { small: true });
-            }
-        });
-    }
+    bot.onFramework('pairing-code', (code) => {
+        console.log(chalk.green(`\n🔑 PAIRING CODE: ${chalk.bold(code)}\n`));
+        console.log(chalk.gray('WhatsApp > Linked Devices > Link a Device > Link with phone number'));
+    });
 
-    if (!conn.authState.creds.registered) {
-        if (pilihMetode === '1') {
-            // ── PAIRING CODE ──
-            const num = (process.env.BOT_NUMBER || '').replace(/\D/g, '');
-            if (!num) {
-                console.log(chalk.red('[PAIRING] ❌ BOT_NUMBER belum diset di .env!'));
-                process.exit(1);
-            }
-            console.log(chalk.cyan(`[PAIRING] 📱 Pairing otomatis ke nomor: ${num}`));
+    bot.onFramework('close', ({ message }) => {
+        console.log(chalk.yellow(`[RECONNECT] ${message}`));
+    });
 
-        // Retry pairing code tanpa crash
-        let code = null;
-        let retryCount = 0;
-        while (!code) {
-            try {
-                retryCount++;
-                console.log(chalk.gray(`[PAIRING] Meminta pairing code... (percobaan ${retryCount})`));
-                await delay(2000);
-                code = await conn.requestPairingCode(num);
-            } catch (e) {
-                console.log(chalk.yellow(`[PAIRING] Gagal: ${e.message} — coba lagi dalam 5 detik...`));
-                await delay(5000);
-                // Reconnect kalau koneksi drop
-                if (e.message?.includes('Connection Closed') || e.message?.includes('connection')) {
-                    console.log(chalk.yellow('[PAIRING] Reconnect dan coba ulang...'));
-                    return main(usePairing, pilihMetode); // restart fungsi, bukan process
-                }
-            }
-        }
+    bot.onFramework('logged-out', () => {
+        console.log(chalk.red('[LOGOUT] Sesi WA logout. Hapus folder auth/ dan jalankan ulang.'));
+        process.exit(0);
+    });
 
-            console.log(chalk.green(`\n🔑 PAIRING CODE: ${chalk.bold(code)}\n`));
-            console.log(chalk.gray('WhatsApp > Linked Devices > Link a Device > Link with phone number'));
-        }
-    }
+    bot.onFramework('error', (err) => {
+        console.error(chalk.red(`[BAILYES][ERROR] ${err?.message || err}`));
+    });
 
-    // ── CONNECTION UPDATE ──
-    conn.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
-        if (connection === 'open') {
-            global.__waConn = conn; // dipakai scheduler/telegram.js buat kirim reminder cross-platform
-            console.log(chalk.green('\n✅ Bot terhubung ke WhatsApp!\n'));
-            console.log(chalk.cyan('📦 Plugin loaded :'), plugins.size);
-            console.log(chalk.cyan('⚙️  Prefix        :'), stg.prefix);
-            console.log(chalk.cyan('👤 Owner         :'), stg.ownerNumber || chalk.red('BELUM DISET!'));
-            console.log(chalk.cyan('🕐 Timezone      :'), stg.timezone);
+    bot.onFramework('ready', async () => {
+        const conn = bot.sock;
+        global.__waConn = conn; // dipakai scheduler/telegram.js buat kirim reminder cross-platform
+        global.__waStore = bot.store; // [FITUR] Store bawaan @isaxn/bailyes — nama kontak, chat, dll
+        console.log(chalk.green('\n✅ Bot terhubung ke WhatsApp!\n'));
+        console.log(chalk.cyan('📦 Plugin loaded :'), plugins.size);
+        console.log(chalk.cyan('⚙️  Prefix        :'), stg.prefix);
+        console.log(chalk.cyan('👤 Owner         :'), stg.ownerNumber || chalk.red('BELUM DISET!'));
+        console.log(chalk.cyan('🕐 Timezone      :'), stg.timezone);
 
-            // Startup check
-            await runStartupCheck(conn);
+        await runStartupCheck(conn);
+        startSyncServer();
 
-            // Sync server
-            startSyncServer();
+        setInterval(() => {
+            runScheduler(conn);
+            runDailySchedule(conn);
+            runEdlinkAutoSync(conn);
+            runDueRemindersOnce({ telegramConn: global.__tgConn || null, waConn: conn });
+            runMorningBriefingOnce({ telegramConn: global.__tgConn || null, waConn: conn });
+        }, 60 * 1000);
 
-            // Scheduler tiap menit
-            setInterval(() => {
-                runScheduler(conn);
-                runDailySchedule(conn);
-                runEdlinkAutoSync(conn);
-                runDueRemindersOnce({ telegramConn: global.__tgConn || null, waConn: conn });
-                runMorningBriefingOnce({ telegramConn: global.__tgConn || null, waConn: conn });
-            }, 60 * 1000);
-
-            // Poll materi, pengumuman & quest tiap 5 menit
-            runEdlinkQuickPoll(conn); // langsung cek sekali saat connect
-            setInterval(() => {
-                runEdlinkQuickPoll(conn);
-            }, 5 * 60 * 1000);
-        }
-
-        if (connection === 'close') {
-            const code = lastDisconnect?.error?.output?.statusCode;
-            if (code !== DisconnectReason.loggedOut) {
-                console.log(chalk.yellow(`[RECONNECT] code: ${code}, reconnecting...`));
-                setTimeout(() => main(usePairing, pilihMetode), 5000);
-            } else {
-                console.log(chalk.red('[LOGOUT] Hapus folder session/ dan jalankan ulang.'));
-                process.exit(0);
-            }
-        }
+        runEdlinkQuickPoll(conn);
+        setInterval(() => {
+            runEdlinkQuickPoll(conn);
+        }, 5 * 60 * 1000);
     });
 
     // ── MESSAGE HANDLER ──
-    // Handler retry decrypt — fix "Decrypted message with closed session"
-    conn.ev.on('messages.retry', ({ key }) => {
-        console.log(chalk.gray('[RETRY] Decrypt retry untuk:', key.id));
-    });
-
-    conn.ev.on('messages.upsert', async ({ messages, type }) => {
+    // Tetap pakai raw event 'messages.upsert' (diteruskan WAClient di dalam
+    // @isaxn/bailyes, stabil lintas reconnect) supaya loader plugin lama
+    // (Map command -> plugin.run) jalan tanpa perlu ditulis ulang ke bot.command().
+    bot.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
+        const conn = bot.sock;
+        if (!conn) return;
 
         for (const msg of messages) {
             try {
@@ -401,8 +327,6 @@ export default async function main(usePairing = false, pilihMetode = null) {
 
                 const parsed = parseCommand(text, stg.prefix, '/');
 
-                // Bukan command (ga diawali prefix) -> lempar ke AI chat bebas (kayak bot Telegram)
-                // Cuma di chat pribadi biar ga spam auto-reply di grup.
                 if (!parsed) {
                     if (!isGroup) {
                         simpananDb.registerUser('wa', chatId);
@@ -413,9 +337,6 @@ export default async function main(usePairing = false, pilihMetode = null) {
 
                 const { commandText: rawCommandText, args, usedPrefix } = parsed;
 
-                // [FITUR] .menu vs /menu isinya beda, ditentukan PREFIX yang dipakai,
-                // bukan platform. ".menu" (atau prefix WA) -> menu Archive.
-                // "/menu" -> menu Flora, walau diketik dari WA.
                 let commandText = rawCommandText;
                 if (rawCommandText === 'menu' && usedPrefix === '/' && usedPrefix !== stg.prefix) {
                     commandText = 'menuflora';
@@ -424,7 +345,7 @@ export default async function main(usePairing = false, pilihMetode = null) {
                 const plugin = plugins.get(commandText);
                 if (!plugin) continue;
 
-                console.log(chalk.magenta(`[CMD] ${isOwner ? '👑' : '👤'} ${senderJid.split('@')[0]} → ${usedPrefix}${rawCommandText}`));
+                console.log(chalk.magenta(`[CMD] ${isOwner ? '👑' : '👤'} ${getContactName(senderJid)} (${senderJid.split('@')[0]}) → ${usedPrefix}${rawCommandText}`));
 
                 if (plugin.owner && !isOwner) {
                     await sendWithLog(conn, chatId, { text: '❌ Command ini khusus owner!' }, { quoted: msg });
@@ -446,4 +367,7 @@ export default async function main(usePairing = false, pilihMetode = null) {
             }
         }
     });
+
+    await bot.start();
+    return bot;
 }

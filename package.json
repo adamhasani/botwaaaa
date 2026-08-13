@@ -5,14 +5,15 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js --pairing"
+    "start": "node index.js"
   },
   "author": "Adam Hasani",
   "license": "ISC",
   "dependencies": {
-    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "@isaxn/bailyes": "^2.2.0",
+    "sharp": "^0.33.0",
     "axios": "^1.13.2",
-    "sql.js": "^1.11.0",
+    "better-sqlite3": "^11.3.0",
     "chalk": "^5.6.2",
     "cheerio": "^1.0.0",
     "dotenv": "^17.2.3",
@@ -30,5 +31,12 @@
     "telegraf": "^4.16.3",
     "tesseract.js": "^5.1.1",
     "xlsx": "^0.18.5"
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "sharp": true,
+    "puppeteer": true,
+    "tesseract.js": true,
+    "protobufjs": true
   }
 }
