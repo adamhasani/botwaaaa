@@ -1,4 +1,16 @@
 import { executeGodAgent, setMode, getMode } from '../../toolkit/floraAgent.js';
+import { Toolkit } from '@isaxn/bailyes';
+
+// [FITUR] Screenshot laptop bisa resolusi tinggi (full-HD/4K) — resize dulu
+// pakai Toolkit.resize (sharp) biar kirim lebih cepat & gak mepet limit ukuran WA.
+// Gagal resize (mis. buffer bukan gambar valid) -> kirim buffer asli apa adanya.
+async function prepScreenshot(buffer) {
+    try {
+        return await Toolkit.resize(buffer, 1280, 1280, 'inside');
+    } catch {
+        return buffer;
+    }
+}
 
 export default {
     name: 'god',
@@ -23,7 +35,7 @@ export default {
             const { message, imageB64 } = await executeGodAgent(taskClean);
 
             if (imageB64) {
-                const buffer = Buffer.from(imageB64, 'base64');
+                const buffer = await prepScreenshot(Buffer.from(imageB64, 'base64'));
                 await conn.sendMessage(chatId, { image: buffer, caption: message.slice(0, 1024) }, { quoted: msg });
             } else {
                 await conn.sendMessage(chatId, { text: message }, { quoted: msg });
@@ -41,7 +53,7 @@ export default {
         try {
             const { message, imageB64 } = await executeGodAgent(text);
             if (imageB64) {
-                const buffer = Buffer.from(imageB64, 'base64');
+                const buffer = await prepScreenshot(Buffer.from(imageB64, 'base64'));
                 await conn.sendMessage(chatId, { image: buffer, caption: message.slice(0, 1024) }, { quoted: msg });
             } else {
                 await conn.sendMessage(chatId, { text: message }, { quoted: msg });

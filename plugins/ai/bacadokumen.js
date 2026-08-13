@@ -3,7 +3,7 @@ import { processDocumentBuffer } from '../../toolkit/documentHandler.js';
 const MEDIA_TYPES = ['documentMessage', 'imageMessage'];
 
 async function downloadMedia(msg) {
-    const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+    const { downloadMediaMessage } = await import('baileys');
     return downloadMediaMessage(msg, 'buffer', {});
 }
 

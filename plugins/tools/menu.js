@@ -6,7 +6,7 @@ export default {
     name: 'menu',
     command: ['menu', 'help', 'bantuan'],
     tags: 'Info',
-    desc: 'Tampilkan menu bot (Archive)',
+    desc: 'Tampilkan menu bot (Archive) dalam bentuk tombol',
     prefix: true,
 
     run: async (conn, msg, { chatInfo, prefix, platform }) => {
@@ -17,70 +17,17 @@ export default {
             ? `╔══════════════════════════╗\n║   🗂️  THE ARCHIVE LITE    ║\n║  Telegram Bot by Adam H.  ║\n╚══════════════════════════╝`
             : `╔══════════════════════════╗\n║   🗂️  THE ARCHIVE LITE    ║\n║   WA Bot by Adam Hasani   ║\n╚══════════════════════════╝`;
 
-        const menu = `${header}
-🕐 ${now} WIB
+        const text = `${header}\n🕐 ${now} WIB\n\n👇 Pilih kategori di bawah.\nMau fitur Flora (God/Hermes/Simpanan/Journal)? Ketik /menu.`;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-📥  *DOWNLOADER*
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-├ ${prefix}tt [link]
-│  └ Download video TikTok tanpa watermark
-├ ${prefix}ig [link]
-│  └ Download video / foto Instagram
-└ ${prefix}yt [link]
-   └ Download video YouTube (maks 10 menit)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋  *TUGAS & DEADLINE*
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-├ ${prefix}addtugas
-│  └ Tambah tugas / deadline baru
-│  └ Format: ${prefix}addtugas Nama | YYYY-MM-DD | HH:mm | Ket
-│  └ Contoh: ${prefix}addtugas UTS MTK | 2025-06-15 | 08:00 | Bab 3
-├ ${prefix}listtugas
-│  └ Lihat semua tugas aktif + countdown
-└ ${prefix}deltugas [nama]
-   └ Hapus tugas dari daftar
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎓  *EDLINK*
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-├ ${prefix}edlinksync
-│  └ Sync tugas, jadwal, materi & pengumuman
-├ ${prefix}updatetoken [token]
-│  └ Update token Edlink manual
-├ ${prefix}claimquest
-│  └ Klaim semua Daily Quest Edlink sekarang
-└ ${prefix}cekkoneksi
-   └ Cek status koneksi VPS ke Edlink
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛠️  *TOOLS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-├ ${prefix}s [reply gambar/video]
-│  └ Buat stiker dari gambar / video
-├ ${prefix}addstiker [reply stiker]
-│  └ Tambah stiker ke koleksi random harian
-├ ${prefix}cekfitur [jadwal/deadline/kelas]
-│  └ Tes notif fitur terjadwal
-└ ${prefix}cekid
-   └ Cek JID chat atau grup ini
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-ℹ️  *INFO*
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-├ ${prefix}menu / ${prefix}help / ${prefix}bantuan
-│  └ Tampilkan menu ini
-└ 🔔 Auto reminder: H-7 • H-3 • H-1 • Saat deadline
-   🔄 Auto sync Edlink: tiap 2 jam
-   🎯 Auto claim quest: tiap hari jam 07:05`;
-
+        // Max 3 tombol per layar (limit tampilan WA) — kategori lain di-cascade ke submenu
         const buttons = [
-            { id: isTelegram ? '/menu' : `/menu`, label: '⚡ Lihat Menu Flora' },
+            { id: '/menudl', label: '📥 Downloader' },
+            { id: '/menutgsedlink', label: '📋 Tugas & Edlink' },
+            { id: '/menutls', label: '🛠️ Tools & Info' },
         ];
 
         try {
-            await sendWithButtons(conn, chatId, platform, menu, buttons, { quoted: msg });
+            await sendWithButtons(conn, chatId, platform, text, buttons, { quoted: msg });
             console.log(`[MENU] ✅ Terkirim ke ${chatId}`);
         } catch (e) {
             console.error(`[MENU] ❌ GAGAL kirim ke ${chatId}:`, e.message);

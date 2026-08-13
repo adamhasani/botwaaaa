@@ -4,6 +4,7 @@ import moment from 'moment-timezone';
 import stg from '../../toolkit/setting.js';
 import { sendScheduleOnStartup, runDailySchedule } from '../../scheduler/daily_schedule.js';
 import { readDb, formatSisa } from '../../scheduler/deadline_reminder.js';
+import { bx } from '@isaxn/bailyes';
 
 const dbPath     = path.join(stg.dbDir, 'deadlines.json');
 const weeklyPath = path.join(stg.dbDir, 'weekly_schedule.json');
@@ -168,16 +169,33 @@ export default {
                 if (sent.lastSentDate) lastSent = sent.lastSentDate;
             }
 
-            const status = `🔧 *STATUS FITUR*\n`
-                + `${'━'.repeat(20)}\n\n`
-                + `📅 *Jadwal DB*\n   ${jadwalStatus}\n\n`
-                + `⏰ *Deadline DB*\n   ${deadlineStatus}\n\n`
-                + `📤 *Jadwal terakhir dikirim*\n   ${lastSent}\n\n`
-                + `🎯 *Target notif*\n   ${process.env.REMINDER_TARGET || '❌ Belum diset'}\n\n`
-                + `${'━'.repeat(20)}\n`
-                + `_Gunakan .cekfitur <jadwal/deadline/kelas/stiker> untuk tes notif_`;
+            // [FITUR] bx.rich — status fitur jadi tabel, fallback ke teks panjang lama kalau gagal.
+            const table = [
+                ['Fitur', 'Status'],
+                ['Jadwal DB', jadwalStatus.replace(/^[✅❌]\s*/, '')],
+                ['Deadline DB', deadlineStatus.replace(/^[✅❌]\s*/, '')],
+                ['Jadwal terakhir', lastSent],
+                ['Target notif', process.env.REMINDER_TARGET || 'Belum diset'],
+            ];
 
-            await conn.sendMessage(chatId, { text: status }, { quoted: msg });
+            try {
+                await bx.rich(conn, chatId, {
+                    title: '🔧 Status Fitur',
+                    table,
+                    tip: 'Gunakan .cekfitur <jadwal/deadline/kelas/stiker> untuk tes notif',
+                    options: { quoted: msg },
+                });
+            } catch (e) {
+                const status = `🔧 *STATUS FITUR*\n`
+                    + `${'━'.repeat(20)}\n\n`
+                    + `📅 *Jadwal DB*\n   ${jadwalStatus}\n\n`
+                    + `⏰ *Deadline DB*\n   ${deadlineStatus}\n\n`
+                    + `📤 *Jadwal terakhir dikirim*\n   ${lastSent}\n\n`
+                    + `🎯 *Target notif*\n   ${process.env.REMINDER_TARGET || '❌ Belum diset'}\n\n`
+                    + `${'━'.repeat(20)}\n`
+                    + `_Gunakan .cekfitur <jadwal/deadline/kelas/stiker> untuk tes notif_`;
+                await conn.sendMessage(chatId, { text: status }, { quoted: msg });
+            }
             await conn.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
         }
 

@@ -1,7 +1,7 @@
 // 📂 Lokasi: .../download/ig.js
 import axios from 'axios'
 // Import wajib untuk fitur Carousel Geser
-import { prepareWAMessageMedia, generateWAMessageFromContent, proto } from '@whiskeysockets/baileys'
+import { prepareWAMessageMedia, generateWAMessageFromContent, proto } from 'baileys'
 
 const AIO = 'https://api-faa.my.id/faa/aio'
 
