@@ -9,8 +9,10 @@ const setting = {
     // WhatsApp
     ownerNumber: (process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
     prefix: process.env.PREFIX || '.',
+    telegramPrefix: process.env.TELEGRAM_PREFIX || '/',
     timezone: process.env.TIMEZONE || 'Asia/Jakarta',
     reminderTarget: process.env.REMINDER_TARGET || '',
+    scheduleEnabled: (process.env.SCHEDULE_ENABLED || 'true').toLowerCase() !== 'false',
     cobaltApi: process.env.COBALT_API || 'https://api.cobalt.tools',
 
     // Telegram
@@ -21,6 +23,9 @@ const setting = {
     groqApiKey: process.env.GROQ_API_KEY || '',
     groqTextModel: process.env.GROQ_TEXT_MODEL || 'llama-3.3-70b-versatile',
     groqSttModel: process.env.GROQ_STT_MODEL || 'whisper-large-v3',
+
+    // Flora — God Mode (kontrol laptop lewat Cloudflare tunnel)
+    laptopAgentUrl: process.env.LAPTOP_AGENT_URL || '',
 
     // Paths
     rootDir: join(__dirname, '..'),

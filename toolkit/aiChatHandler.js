@@ -10,6 +10,9 @@ import { performWebSearch } from './webSearch.js';
 import { getInfoCuaca } from './weather.js';
 import { scrapePageContent, extractUrl } from './scrape.js';
 import { getRelevantContext } from './contextRecall.js';
+import { getMode } from './floraAgent.js';
+import godPlugin from '../plugins/flora/god.js';
+import hermesPlugin from '../plugins/flora/hermes.js';
 import chalk from 'chalk';
 
 function parseSimpleDuration(text) {
@@ -23,6 +26,17 @@ function parseSimpleDuration(text) {
 }
 
 export async function handleFreeformMessage(conn, msg, { platform, chatId, senderId, text }) {
+    // [FITUR] Mode persistent God/Hermes — kalau chat lagi "masuk mode" ini,
+    // pesan bebas (tanpa prefix) langsung dianggap perintah buat mode itu,
+    // BUKAN diproses sebagai chat AI biasa. Keluar mode lewat .menu.
+    const activeMode = getMode(platform, chatId);
+    if (activeMode === 'god') {
+        return godPlugin.runPersistent(conn, msg, { chatId, text });
+    }
+    if (activeMode === 'hermes') {
+        return hermesPlugin.runPersistent(conn, msg, { chatId, text });
+    }
+
     if (!stg.groqApiKey) {
         // Groq belum dikonfigurasi — diam aja, jangan spam error tiap chat biasa
         return;

@@ -40,6 +40,31 @@ export function makeTelegramConn(bot) {
             }
 
             if (typeof content.text === 'string') {
+                // [FITUR] Tombol interaktif — kalau plugin kirim content.buttons
+                // ([{id, label}]), translate ke inline keyboard Telegram.
+                if (Array.isArray(content.buttons) && content.buttons.length) {
+                    const rows = [];
+                    for (let i = 0; i < content.buttons.length; i += 2) {
+                        rows.push(content.buttons.slice(i, i + 2).map(b => ({ text: b.label, callback_data: b.id })));
+                    }
+                    return safeSend(() => bot.telegram.sendMessage(chatId, stripWaMarkdown(content.text), {
+                        ...replyOpts,
+                        reply_markup: { inline_keyboard: rows },
+                    }));
+                }
+                // [FITUR] List message ala WA (sections/rows) -> tetap ditranslate jadi inline keyboard
+                if (Array.isArray(content.sections) && content.sections.length) {
+                    const rows = [];
+                    for (const section of content.sections) {
+                        for (const row of section.rows || []) {
+                            rows.push([{ text: row.title, callback_data: row.id }]);
+                        }
+                    }
+                    return safeSend(() => bot.telegram.sendMessage(chatId, stripWaMarkdown(content.text), {
+                        ...replyOpts,
+                        reply_markup: { inline_keyboard: rows },
+                    }));
+                }
                 return safeSend(() => bot.telegram.sendMessage(chatId, stripWaMarkdown(content.text), replyOpts));
             }
             if (content.image) {

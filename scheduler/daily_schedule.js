@@ -161,6 +161,8 @@ function formatScheduleMessage(todayData) {
 const remindedSections = new Set();
 
 async function runClassReminder(conn) {
+    if (!stg.scheduleEnabled) return; // dimatikan manual lewat .env (SCHEDULE_ENABLED=false)
+
     const target = process.env.REMINDER_TARGET;
     if (!target) return;
 
@@ -168,7 +170,7 @@ async function runClassReminder(conn) {
     const todayStr = now.format('YYYY-MM-DD');
     const todayData = getTodayFromDb(todayStr);
 
-    if (!todayData?.sections?.length) return;
+    if (!todayData?.sections?.length) return; // masa libur / tidak ada kelas — skip diam-diam
 
     for (const s of todayData.sections) {
         const startTime     = moment.tz(s.startedAt, stg.timezone);
@@ -202,12 +204,20 @@ async function runClassReminder(conn) {
 // KIRIM JADWAL HARI INI
 // ─────────────────────────────────────────────
 async function sendTodaySchedule(conn, todayStr) {
+    if (!stg.scheduleEnabled) return; // dimatikan manual lewat .env (SCHEDULE_ENABLED=false)
+
     const target = process.env.REMINDER_TARGET;
     if (!target) return;
 
     const todayData = getTodayFromDb(todayStr);
     if (!todayData) {
         console.log('[DailySchedule] Data hari ini tidak ada di DB — tunggu auto sync...');
+        return;
+    }
+
+    if (!todayData.sections || todayData.sections.length === 0) {
+        console.log(`[DailySchedule] 🏖️ Tidak ada kelas hari ini (${todayStr}) — skip kirim (masa libur).`);
+        saveLastSentDate(todayStr); // tandai sudah "diproses" biar ga dicoba ulang tiap menit
         return;
     }
 
