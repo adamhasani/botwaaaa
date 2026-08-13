@@ -6,7 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { downloadContentFromMessage } from 'baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import stg from '../../toolkit/setting.js';
 
 const STIKER_DB  = path.join(stg.dbDir, 'stiker.json');

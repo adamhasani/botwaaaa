@@ -6,7 +6,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import webp from 'node-webpmux';
 import { exec } from 'child_process';
 import axios from 'axios';
-import { downloadContentFromMessage } from 'baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { fileTypeFromBuffer } from 'file-type';
 
 const tmpPath = (ext) => path.join(os.tmpdir(), `${randomBytes(6).readUIntLE(0, 6).toString(36)}.${ext}`);

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import axios from 'axios';
-import { downloadContentFromMessage } from 'baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { writeExifImg, writeExifVid } from '../../toolkit/exif.js';
 
 export default {
@@ -77,14 +77,6 @@ export default {
             const stickerBuffer = fs.readFileSync(stickerPath);
             await conn.sendMessage(chatId, { sticker: stickerBuffer }, { quoted: msg });
             console.log('[Stiker] ✅ Berhasil');
-
-            // [FITUR] Info singkat ukuran & tipe — dikirim terpisah karena WA gak
-            // support caption pada pesan sticker.
-            const sizeKb = (stickerBuffer.length / 1024).toFixed(1);
-            conn.sendMessage(chatId, {
-                text: `_✨ Stiker ${isVideo ? 'animasi' : 'gambar'} — ${sizeKb} KB_`
-            }, { quoted: msg }).catch(() => {});
-
             try { fs.unlinkSync(stickerPath); } catch {}
 
         } catch (e) {

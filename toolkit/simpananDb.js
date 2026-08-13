@@ -1,16 +1,21 @@
 /* ╔══════════════════════════════════════════╗
    ║  SIMPANAN DB — dipakai bareng WA & Telegram ║
    ║  Port dari bot.py (sqlite3) -> better-sqlite3 ║
+   ║  [MIGRASI CPU] -> sql.js (WASM). better-sqlite3 ║
+   ║  itu native binary, crash "Illegal instruction"  ║
+   ║  di CPU virtual tanpa AVX/SSE4.2 (VPS murah/       ║
+   ║  QEMU lama). sql.js = SQLite via WebAssembly,       ║
+   ║  jalan di CPU manapun. Lihat toolkit/sqliteWasm.js.  ║
    ╚══════════════════════════════════════════╝ */
-import Database from 'better-sqlite3';
+import { openDb } from './sqliteWasm.js';
 import path from 'path';
 import stg from './setting.js';
 import fs from 'fs';
 
 if (!fs.existsSync(stg.dbDir)) fs.mkdirSync(stg.dbDir, { recursive: true });
 
-const db = new Database(path.join(stg.dbDir, 'simpenan.db'));
-db.pragma('journal_mode = WAL');
+const db = await openDb(path.join(stg.dbDir, 'simpenan.db'));
+db.pragma('journal_mode = WAL'); // no-op di wrapper WASM, dipertahankan biar baris di bawah gak perlu diubah
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS items (

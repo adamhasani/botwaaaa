@@ -6,30 +6,28 @@
    ║  wrapper masing2, bukan di sini.                          ║
    ╚══════════════════════════════════════════════════════╝ */
 
-import { bx } from '@isaxn/bailyes';
-
 /**
- * Kirim pesan dengan tombol. Konsisten manggil conn.sendMessage() untuk Telegram
- * (lewat telegramAdapter.js), tapi untuk WA sekarang pakai bx.button native dari
- * @isaxn/bailyes — lebih stabil daripada format sections/list Baileys lama.
- * @param buttons  [{ id: '/menu', label: '⚡ Menu Flora' }, ...] — max ~3 disarankan (limit tampilan WA)
+ * Kirim pesan dengan tombol. Konsisten manggil conn.sendMessage() untuk
+ * kedua platform — Baileys terima {text, sections}, telegramAdapter.js
+ * terima {text, buttons} (lihat toolkit/telegramAdapter.js).
+ * @param buttons  [{ id: '/menu', label: '⚡ Menu Flora' }, ...]
  */
 export async function sendWithButtons(conn, chatId, platform, text, buttons, opts = {}) {
     if (platform === 'telegram') {
         return conn.sendMessage(chatId, { text, buttons }, opts);
     }
 
-    // WhatsApp — bx.button butuh sock mentah (bukan wrapper), "conn" yang dikirim
-    // dari plugin di sini SUDAH sock mentah karena main.js pakai bot.sock langsung.
+    // WhatsApp — pakai interactiveMessage (list) via Baileys, fallback ke teks + angka kalau gagal render.
     try {
-        return await bx.button(conn, chatId, {
-            body: text,
+        const rows = buttons.map(b => ({ title: b.label, description: b.desc || '', rowId: b.id }));
+        return await conn.sendMessage(chatId, {
+            text,
             footer: 'The Archive Bot',
-            buttons: buttons.map(b => ({ text: b.label, id: b.id })),
-            options: opts,
-        });
+            title: '',
+            buttonText: 'Pilih Menu',
+            sections: [{ title: 'Menu', rows }],
+        }, opts);
     } catch (e) {
-        // Fallback aman kalau bx.button gagal render (versi WA client tertentu, dll)
         const manual = buttons.map((b, i) => `${i + 1}. ${b.label} → ketik *${b.id}*`).join('\n');
         return conn.sendMessage(chatId, { text: `${text}\n\n${manual}` }, opts);
     }

@@ -1,5 +1,4 @@
 import { executeHermesAgent, setMode } from '../../toolkit/floraAgent.js';
-import { AIRich } from '@isaxn/bailyes';
 
 export default {
     name: 'hermes',
@@ -22,7 +21,7 @@ export default {
         try {
             await conn.sendMessage(chatId, { text: '⚡ [HERMES] Memproses permintaan...' }, { quoted: msg });
             const result = await executeHermesAgent(taskClean);
-            await sendHermesReply(conn, chatId, msg, taskClean, result, prefix);
+            await conn.sendMessage(chatId, { text: formatHermesResult(result, taskClean) }, { quoted: msg });
             console.log(`[HERMES] ✅ Selesai untuk ${chatId}`);
         } catch (e) {
             console.error(`[HERMES] ❌ GAGAL untuk ${chatId}:`, e.message);
@@ -33,7 +32,7 @@ export default {
     runPersistent: async (conn, msg, { chatId, text }) => {
         try {
             const result = await executeHermesAgent(text);
-            await sendHermesReply(conn, chatId, msg, text, result, '.');
+            await conn.sendMessage(chatId, { text: formatHermesResult(result, text) }, { quoted: msg });
         } catch (e) {
             console.error(`[HERMES-PERSIST] ❌ GAGAL untuk ${chatId}:`, e.message);
             await conn.sendMessage(chatId, { text: `⚠️ Error Hermes Mode: ${e.message}` }, { quoted: msg });
@@ -41,55 +40,16 @@ export default {
     },
 };
 
-// [FITUR] AIRich terstruktur — vps_info dapat tabel metrik, web_research dapat
-// tombol lanjutan (addSuggest). Tiga lapis fallback: AIRich+table+suggest ->
-// AIRich teks polos -> conn.sendMessage teks biasa. Command TIDAK PERNAH gagal
-// total walau salah satu fitur AIRich yang lebih baru gak kesupport di device tertentu.
-async function sendHermesReply(conn, chatId, msg, taskPrompt, result, prefix) {
-    const { intent, narrative, table, searchQuery } = result;
-
-    // Lapis 1: AIRich penuh (tabel untuk vps_info, tombol lanjutan untuk web_research)
-    try {
-        const rich = new AIRich(conn).setTitle(intent === 'vps_info' ? '🖥️ Hermes — VPS Report' : '⚡ Hermes — Web Research');
-
-        if (table) rich.addTable(table);
-        if (narrative) rich.addText(narrative);
-
-        if (intent === 'web_research' && searchQuery) {
-            try {
-                // addSuggest belum ada contoh parameter resmi di dokumentasi paket —
-                // dibungkus try/catch sendiri (terpisah dari lapis luar) supaya kalau
-                // signature-nya beda dari dugaan, sisa pesan (judul+tabel+teks) tetap terkirim.
-                rich.addSuggest([
-                    { text: '🔍 Riset lebih dalam', prompt: `${prefix}hermes riset lebih detail soal ${searchQuery}` },
-                    { text: '💾 Simpan hasil ini', prompt: `${prefix}simpan ${narrative.slice(0, 200)}` },
-                ]);
-            } catch { /* addSuggest gagal — lanjut tanpa tombol, bukan gagal total */ }
-        }
-
-        rich.addTip(`Perintah: ${taskPrompt}`);
-        await rich.send(chatId, { quoted: msg });
-        return;
-    } catch (e) {
-        console.log(`[HERMES] AIRich penuh gagal (${e.message}), coba versi sederhana...`);
-    }
-
-    // Lapis 2: AIRich sederhana (judul + teks doang, tanpa tabel/tombol)
-    try {
-        const rich = new AIRich(conn)
-            .setTitle('⚡ Hermes Report')
-            .addText(narrative || 'Tidak ada hasil.')
-            .addTip(`Perintah: ${taskPrompt}`);
-        await rich.send(chatId, { quoted: msg });
-        return;
-    } catch (e) {
-        console.log(`[HERMES] AIRich sederhana juga gagal (${e.message}), fallback teks polos.`);
-    }
-
-    // Lapis 3: teks polos — selalu jalan, gak bergantung fitur bailyes apapun
-    let text = narrative || 'Tidak ada hasil.';
+// executeHermesAgent return object { intent, narrative, table?, searchQuery? }.
+// Format jadi teks WA biasa — gak pakai bx.rich/AIRich (fitur @isaxn/bailyes,
+// gak dipakai di versi ini karena butuh sharp yang gak kompatibel CPU tanpa AVX).
+function formatHermesResult(result, taskPrompt) {
+    const { intent, narrative, table } = result;
+    let text = intent === 'vps_info' ? '🖥️ *Hermes — VPS Report*\n\n' : '⚡ *Hermes — Web Research*\n\n';
     if (table) {
-        text = table.map(row => row.join(' | ')).join('\n') + '\n\n' + text;
+        text += table.map(row => row.join(' : ')).join('\n') + '\n\n';
     }
-    await conn.sendMessage(chatId, { text }, { quoted: msg });
+    text += narrative || 'Tidak ada hasil.';
+    text += `\n\n_Perintah: ${taskPrompt}_`;
+    return text;
 }

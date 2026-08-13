@@ -1,6 +1,5 @@
 import * as db from '../../toolkit/simpananDb.js';
 import { generateJournalReport } from '../../toolkit/groqAI.js';
-import { bx } from '@isaxn/bailyes';
 
 export default {
     name: 'journalreport',
@@ -26,16 +25,6 @@ export default {
         }
 
         const report = await generateJournalReport(entries, days);
-
-        try {
-            await bx.rich(conn, chatId, {
-                title: '📊 Laporan Jurnal — 7 Hari Terakhir',
-                text: report,
-                tip: `Berdasarkan ${entries.length} entri jurnal dalam 7 hari terakhir`,
-                options: { quoted: msg },
-            });
-        } catch (e) {
-            await conn.sendMessage(chatId, { text: `📊 *Laporan Jurnal - 7 Hari Terakhir*\n\n${report}` }, { quoted: msg });
-        }
+        await conn.sendMessage(chatId, { text: `📊 *Laporan Jurnal - 7 Hari Terakhir*\n\n${report}` }, { quoted: msg });
     }
 };

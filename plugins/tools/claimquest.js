@@ -1,7 +1,6 @@
 import { claimDailyQuests } from '../../scheduler/edlink_quest.js';
 import moment from 'moment-timezone';
 import stg from '../../toolkit/setting.js';
-import { bx } from '@isaxn/bailyes';
 
 export default {
     name: 'claimquest',
@@ -28,39 +27,17 @@ export default {
             const result = await claimDailyQuests();
             const now    = moment().tz(stg.timezone);
 
+            let text;
+
             if (result.error) {
-                let text = `❌ *Gagal klaim quest!*\n\n*Error:* ${result.error}\n\n`;
+                text = `❌ *Gagal klaim quest!*\n\n*Error:* ${result.error}\n\n`;
                 if (result.error.includes('email') || result.error.includes('password')) {
                     text += `Cek \`EDLINK_EMAIL\` dan \`EDLINK_PASSWORD\` di .env.`;
                 } else {
                     text += `Coba lagi atau cek \`.cekkoneksi\`.`;
                 }
-                return conn.sendMessage(chatId, { text }, { quoted: msg });
-            }
-
-            // [FITUR] bx.rich — hasil klaim quest jadi tabel, fallback ke teks lama kalau gagal render.
-            const table = [['', 'Quest', 'Poin']];
-            for (const q of result.claimed) table.push(['✅', q.label, q.poin ? `+${q.poin}` : '-']);
-            for (const q of result.skipped) table.push(['⬜', q.label, '-']);
-
-            if (table.length === 1) {
-                await conn.sendMessage(chatId, {
-                    text: `🎯 *Daily Quest Edlink*\n_Tidak ada tombol Klaim yang ditemukan — semua quest mungkin sudah diklaim hari ini._ ✅`
-                }, { quoted: msg });
-                return;
-            }
-
-            try {
-                await bx.rich(conn, chatId, {
-                    title: `🎯 Daily Quest Edlink — ${now.format('dddd, DD MMM')}`,
-                    table,
-                    tip: result.claimed.length > 0
-                        ? `💰 Total: +${result.poinTotal} poin — auto-claim juga aktif jam 07:05`
-                        : 'Auto-claim juga aktif jam 07:05 setiap hari',
-                    options: { quoted: msg },
-                });
-            } catch (e) {
-                let text = `🎯 *DAILY QUEST EDLINK*\n`;
+            } else {
+                text = `🎯 *DAILY QUEST EDLINK*\n`;
                 text += `📅 ${now.format('dddd, DD MMM YYYY — HH:mm')} WIB\n`;
                 text += `${'─'.repeat(24)}\n\n`;
 
@@ -80,10 +57,16 @@ export default {
                     text += '\n';
                 }
 
+                if (result.claimed.length === 0 && result.skipped.length === 0) {
+                    text += `_Tidak ada tombol Klaim yang ditemukan._\n`;
+                    text += `_Semua quest mungkin sudah diklaim hari ini._ ✅\n\n`;
+                }
+
                 text += `${'─'.repeat(24)}\n`;
                 text += `_Auto-claim juga aktif jam 07:05 setiap hari._`;
-                await conn.sendMessage(chatId, { text }, { quoted: msg });
             }
+
+            await conn.sendMessage(chatId, { text }, { quoted: msg });
 
         } catch (e) {
             await conn.sendMessage(chatId, {

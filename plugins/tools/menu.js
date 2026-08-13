@@ -76,9 +76,7 @@ export default {
    🎯 Auto claim quest: tiap hari jam 07:05`;
 
         const buttons = [
-            { id: `${prefix}listtugas`, label: '📋 Lihat Tugas' },
-            { id: `${prefix}cekfitur status`, label: '🔧 Status Fitur' },
-            { id: '/menu', label: '⚡ Menu Flora' },
+            { id: isTelegram ? '/menu' : `/menu`, label: '⚡ Lihat Menu Flora' },
         ];
 
         try {

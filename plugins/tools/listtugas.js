@@ -2,7 +2,6 @@ import fs from 'fs';
 import moment from 'moment-timezone';
 import stg from '../../toolkit/setting.js';
 import path from 'path';
-import { bx } from '@isaxn/bailyes';
 
 const dbPath = path.join(stg.dbDir, 'deadlines.json');
 
@@ -46,39 +45,19 @@ export default {
             return conn.sendMessage(chatId, { text: '🎉 Tidak ada tugas aktif saat ini!' }, { quoted: msg });
         }
 
-        // [FITUR] Tabel rapi lewat bx.rich (richResponseMessage, Baileys 7 RC13).
-        // Fallback ke format teks lama kalau bx.rich gagal render.
-        const table = [['', 'Tugas', 'Deadline', 'Sisa Waktu']];
+        let text = `📋 *DAFTAR TUGAS AKTIF*\n_${tasks.length} tugas ditemukan_\n${'─'.repeat(25)}\n`;
+
         tasks.forEach((t, i) => {
             const sisa = t.dl.diff(now);
             const urgent = sisa < 86400000 ? '🔴' : sisa < 259200000 ? '🟡' : '🟢';
-            table.push([urgent, t.name, t.dl.format('DD/MM HH:mm'), formatSisa(sisa)]);
+            text += `\n${urgent} *${i + 1}. ${t.name}*\n`;
+            text += `   📅 ${t.dl.format('ddd, DD MMM YYYY • HH:mm')} WIB\n`;
+            text += `   ⏳ Sisa: _${formatSisa(sisa)}_\n`;
+            if (t.description && t.description !== '-') text += `   📝 ${t.description}\n`;
         });
 
-        try {
-            await bx.rich(conn, chatId, {
-                title: `📋 Daftar Tugas Aktif (${tasks.length})`,
-                text: tasks
-                    .filter(t => t.description && t.description !== '-')
-                    .map(t => `📝 ${t.name}: ${t.description}`)
-                    .join('\n') || undefined,
-                table,
-                tip: '🟢 Aman  🟡 < 3 hari  🔴 < 1 hari',
-                options: { quoted: msg },
-            });
-        } catch (e) {
-            // Fallback — format teks lama, sama seperti sebelum bx.rich dipasang.
-            let text = `📋 *DAFTAR TUGAS AKTIF*\n_${tasks.length} tugas ditemukan_\n${'─'.repeat(25)}\n`;
-            tasks.forEach((t, i) => {
-                const sisa = t.dl.diff(now);
-                const urgent = sisa < 86400000 ? '🔴' : sisa < 259200000 ? '🟡' : '🟢';
-                text += `\n${urgent} *${i + 1}. ${t.name}*\n`;
-                text += `   📅 ${t.dl.format('ddd, DD MMM YYYY • HH:mm')} WIB\n`;
-                text += `   ⏳ Sisa: _${formatSisa(sisa)}_\n`;
-                if (t.description && t.description !== '-') text += `   📝 ${t.description}\n`;
-            });
-            text += `\n${'─'.repeat(25)}\n🟢 Aman  🟡 < 3 hari  🔴 < 1 hari`;
-            await conn.sendMessage(chatId, { text }, { quoted: msg });
-        }
+        text += `\n${'─'.repeat(25)}\n🟢 Aman  🟡 < 3 hari  🔴 < 1 hari`;
+
+        await conn.sendMessage(chatId, { text }, { quoted: msg });
     }
 };

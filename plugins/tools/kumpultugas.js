@@ -60,7 +60,7 @@ async function submitJawaban(postId, mediaIds, answerText = '') {
 }
 
 async function downloadMedia(conn, msg) {
-    const { downloadMediaMessage } = await import('baileys');
+    const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
     return await downloadMediaMessage(msg, 'buffer', {});
 }
 
